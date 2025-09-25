@@ -1,0 +1,169 @@
+package repository
+
+import (
+	"context"
+	"math"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/order-nest/internal/domain"
+	"github.com/order-nest/internal/repository/schema"
+	"gorm.io/gorm"
+)
+
+type OrderRepository struct {
+	db *gorm.DB
+}
+
+// NewOrderRepository initializes the repository
+func NewOrderRepository(db *gorm.DB) *OrderRepository {
+	return &OrderRepository{db: db}
+}
+
+// Create persists a new order.
+func (o *OrderRepository) Create(ctx context.Context, params domain.Order) (domain.CreateOrderResponse, error) {
+	repoOrder := mapOrderDomainToSchema(params)
+	repoOrder.OrderConsignmentId = uuid.New().String()
+	repoOrder.OrderCreatedAt = time.Now()
+	repoOrder.UpdatedAt = time.Now()
+
+	tx := o.db.WithContext(ctx)
+	if err := tx.Create(&repoOrder).Error; err != nil {
+		return domain.CreateOrderResponse{}, err
+	}
+
+	return domain.CreateOrderResponse{
+		ConsignmentId:   repoOrder.OrderConsignmentId,
+		MerchantOrderId: repoOrder.MerchantOrderId,
+		OrderStatus:     repoOrder.OrderStatus,
+		DeliveryFee:     repoOrder.DeliveryFee,
+	}, nil
+}
+
+// Cancel sets an order status to canceled.
+func (o *OrderRepository) Cancel(ctx context.Context, consignmentId string, userID uint64) error {
+	tx := o.db.WithContext(ctx)
+	result := tx.Model(&schema.Order{}).
+		Where("order_consignment_id = ?", consignmentId).
+		Updates(map[string]interface{}{
+			"order_status": domain.OrderStatusCanceled,
+			"updated_by":   userID,
+			"updated_at":   time.Now(),
+		})
+
+	return result.Error
+}
+
+// List returns paginated orders for a user and filters.
+func (o *OrderRepository) List(ctx context.Context, params domain.OrderListFilter) (domain.OrderListResponse, error) {
+	limit, page, offset := calculatePagination(params.Limit, params.Page)
+
+	tx := o.db.WithContext(ctx)
+	base := tx.Model(&schema.Order{}).
+		Where("created_by = ? AND transfer_status = ? AND archive = ?",
+			params.CreatedBy, params.TransferStatus, params.Archive,
+		)
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return domain.OrderListResponse{}, err
+	}
+
+	var orders []schema.Order
+	if err := base.Limit(int(limit)).Offset(int(offset)).Find(&orders).Error; err != nil {
+		return domain.OrderListResponse{}, err
+	}
+
+	totalPages := int64(math.Ceil(float64(total) / float64(limit)))
+	domainOrders := make([]domain.Order, len(orders))
+	for idx, ord := range orders {
+		domainOrders[idx] = toDomainOrder(ord)
+	}
+
+	return domain.OrderListResponse{
+		Data:        domainOrders,
+		Total:       uint64(total),
+		CurrentPage: uint64(page),
+		PerPage:     uint64(limit),
+		TotalInPage: uint64(len(domainOrders)),
+		LastPage:    uint64(totalPages),
+	}, nil
+}
+
+// toDomainOrder converts schema to domain.
+func toDomainOrder(o schema.Order) domain.Order {
+	return domain.Order{
+		OrderConsignmentId: o.OrderConsignmentId,
+		OrderCreatedAt:     o.OrderCreatedAt,
+		OrderDescription:   o.OrderDescription,
+		MerchantOrderId:    o.MerchantOrderId,
+		RecipientName:      o.RecipientName,
+		RecipientAddress:   o.RecipientAddress,
+		RecipientPhone:     o.RecipientPhone,
+		OrderStatus:        domain.OrderStatus(o.OrderStatus),
+		OrderAmount:        o.OrderAmount,
+		TotalFee:           o.TotalFee,
+		Instruction:        o.Instruction,
+		OrderTypeId:        o.OrderTypeId,
+		CodFee:             o.CodFee,
+		PromoDiscount:      o.PromoDiscount,
+		Discount:           o.Discount,
+		DeliveryFee:        o.DeliveryFee,
+		OrderType:          o.OrderType,
+		ItemType:           o.ItemType,
+		TransferStatus:     o.TransferStatus,
+		Archive:            o.Archive,
+		UpdatedAt:          o.UpdatedAt,
+		CreatedBy:          o.CreatedBy,
+		UpdatedBy:          o.UpdatedBy,
+	}
+}
+
+// mapOrderDomainToSchema converts domain t0 schema.
+func mapOrderDomainToSchema(params domain.Order) schema.Order {
+	return schema.Order{
+		OrderDescription: params.OrderDescription,
+		RecipientName:    params.RecipientName,
+		RecipientAddress: params.RecipientAddress,
+		RecipientPhone:   params.RecipientPhone,
+		OrderAmount:      params.OrderAmount,
+		TotalFee:         params.TotalFee,
+		MerchantOrderId:  params.MerchantOrderId,
+		Instruction:      params.Instruction,
+		OrderTypeId:      params.OrderTypeId,
+		CodFee:           params.CodFee,
+		PromoDiscount:    params.PromoDiscount,
+		Discount:         params.Discount,
+		DeliveryFee:      params.DeliveryFee,
+		OrderStatus:      string(params.OrderStatus),
+		OrderType:        params.OrderType,
+		ItemType:         params.ItemType,
+		TransferStatus:   params.TransferStatus,
+		Archive:          params.Archive,
+		CreatedBy:        params.CreatedBy,
+		UpdatedBy:        params.UpdatedBy,
+	}
+}
+
+// AutoMigrate ensures schema is up to date.
+func (o *OrderRepository) AutoMigrate() error {
+	return o.db.AutoMigrate(&schema.Order{})
+}
+
+// calculatePagination computes limit, page, and offset with defaults and bounds.
+func calculatePagination(requestLimit, requestPage int64) (limit, page, offset int64) {
+	const defaultPageSize int64 = 10
+
+	limit = requestLimit
+	if limit < 1 || limit > defaultPageSize {
+		limit = defaultPageSize
+	}
+
+	page = requestPage
+	if page < 1 {
+		page = 1
+	}
+
+	offset = (page - 1) * limit
+	return limit, page, offset
+}
