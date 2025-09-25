@@ -26,7 +26,7 @@ func Bootstrap(ctx context.Context) (*gin.Engine, error) {
 
 	// JWT & Middleware
 	jwtService := orderNestJwt.NewTokenService([]byte(config.GetConfig().JwtSecretKey))
-	authMiddleware := middleware.NewAuthMiddleware(jwtService)
+	authMiddleware := middleware.NewAuth(jwtService)
 
 	// Repositories & Usecases
 	userRepo := repository.NewUserRepository(db)

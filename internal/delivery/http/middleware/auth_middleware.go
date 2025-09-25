@@ -17,12 +17,12 @@ type Auth struct {
 }
 
 // NewAuthMiddleware creates a new instance of Auth middleware.
-func NewAuthMiddleware(tokenService *orderNestJwt.TokenService) *Auth {
+func NewAuth(tokenService *orderNestJwt.TokenService) *Auth {
 	return &Auth{tokenService: tokenService}
 }
 
 // lookupBearerToken extracts a bearer token (case-insensitive) from Authorization header.
-func lookupBearerToken(r *http.Request) (string, error) {
+func extractBearerToken(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", errors.New("authorization header missing")
@@ -40,11 +40,11 @@ func lookupBearerToken(r *http.Request) (string, error) {
 	return token, nil
 }
 
-// AuthRequired is a Gin middleware that validates JWT and sets user info in the context.
-func (a *Auth) AuthRequired(next gin.HandlerFunc) gin.HandlerFunc {
+// RequireAuthentication validates JWT and sets user info in the context.
+func (a *Auth) RequireAuthentication(next gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract token
-		token, err := lookupBearerToken(c.Request)
+		token, err := extractBearerToken(c.Request)
 		if err != nil {
 			appLogger.L().WithError(err).Warn("auth: missing or invalid authorization header")
 			c.JSON(http.StatusUnauthorized, customErr.Unauthrized)

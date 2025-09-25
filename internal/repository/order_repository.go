@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/order-nest/internal/domain"
 	"github.com/order-nest/internal/repository/schema"
+	appLogger "github.com/order-nest/pkg/logger"
 	"gorm.io/gorm"
 )
 
@@ -22,6 +23,7 @@ func NewOrderRepository(db *gorm.DB) *OrderRepository {
 
 // Create persists a new order.
 func (o *OrderRepository) Create(ctx context.Context, params domain.Order) (domain.CreateOrderResponse, error) {
+	appLogger.L().WithField("merchant_order_id", params.MerchantOrderId).Info("repo: creating order")
 	repoOrder := mapOrderDomainToSchema(params)
 	repoOrder.OrderConsignmentId = uuid.New().String()
 	repoOrder.OrderCreatedAt = time.Now()
@@ -29,19 +31,26 @@ func (o *OrderRepository) Create(ctx context.Context, params domain.Order) (doma
 
 	tx := o.db.WithContext(ctx)
 	if err := tx.Create(&repoOrder).Error; err != nil {
+		appLogger.L().WithError(err).Error("repo: order create failed")
 		return domain.CreateOrderResponse{}, err
 	}
 
-	return domain.CreateOrderResponse{
+	resp := domain.CreateOrderResponse{
 		ConsignmentId:   repoOrder.OrderConsignmentId,
 		MerchantOrderId: repoOrder.MerchantOrderId,
 		OrderStatus:     repoOrder.OrderStatus,
 		DeliveryFee:     repoOrder.DeliveryFee,
-	}, nil
+	}
+	appLogger.L().WithField("consignment_id", resp.ConsignmentId).Info("repo: order created")
+	return resp, nil
 }
 
 // Cancel sets an order status to canceled.
 func (o *OrderRepository) Cancel(ctx context.Context, consignmentId string, userID uint64) error {
+	appLogger.L().WithFields(map[string]interface{}{
+		"consignment_id": consignmentId,
+		"user_id":        userID,
+	}).Info("repo: cancelling order")
 	tx := o.db.WithContext(ctx)
 	result := tx.Model(&schema.Order{}).
 		Where("order_consignment_id = ?", consignmentId).
@@ -50,12 +59,23 @@ func (o *OrderRepository) Cancel(ctx context.Context, consignmentId string, user
 			"updated_by":   userID,
 			"updated_at":   time.Now(),
 		})
-
-	return result.Error
+	if result.Error != nil {
+		appLogger.L().WithError(result.Error).Error("repo: order cancel failed")
+		return result.Error
+	}
+	appLogger.L().WithField("consignment_id", consignmentId).Info("repo: order cancelled")
+	return nil
 }
 
 // List returns paginated orders for a user and filters.
 func (o *OrderRepository) List(ctx context.Context, params domain.OrderListFilter) (domain.OrderListResponse, error) {
+	appLogger.L().WithFields(map[string]interface{}{
+		"created_by":      params.CreatedBy,
+		"transfer_status": params.TransferStatus,
+		"archive":         params.Archive,
+		"limit":           params.Limit,
+		"page":            params.Page,
+	}).Info("repo: listing orders")
 	limit, page, offset := calculatePagination(params.Limit, params.Page)
 
 	tx := o.db.WithContext(ctx)
@@ -66,11 +86,13 @@ func (o *OrderRepository) List(ctx context.Context, params domain.OrderListFilte
 
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
+		appLogger.L().WithError(err).Error("repo: count orders failed")
 		return domain.OrderListResponse{}, err
 	}
 
 	var orders []schema.Order
 	if err := base.Limit(int(limit)).Offset(int(offset)).Find(&orders).Error; err != nil {
+		appLogger.L().WithError(err).Error("repo: list orders failed")
 		return domain.OrderListResponse{}, err
 	}
 
@@ -80,14 +102,16 @@ func (o *OrderRepository) List(ctx context.Context, params domain.OrderListFilte
 		domainOrders[idx] = toDomainOrder(ord)
 	}
 
-	return domain.OrderListResponse{
+	resp := domain.OrderListResponse{
 		Data:        domainOrders,
 		Total:       uint64(total),
 		CurrentPage: uint64(page),
 		PerPage:     uint64(limit),
 		TotalInPage: uint64(len(domainOrders)),
 		LastPage:    uint64(totalPages),
-	}, nil
+	}
+	appLogger.L().WithField("total", resp.Total).Info("repo: list orders success")
+	return resp, nil
 }
 
 // toDomainOrder converts schema to domain.

@@ -27,9 +27,9 @@ func NewOrderHandler(orderUsecase contract.OrderUsecase) *OrderHandler {
 // Routes returns the route table for order endpoints.
 func (o *OrderHandler) Routes(authMiddleware *middleware.Auth) []RouteDef {
 	return []RouteDef{
-		{Method: http.MethodPost, Path: "/orders", Handlers: []gin.HandlerFunc{authMiddleware.AuthRequired(o.createOrder)}},
-		{Method: http.MethodPut, Path: "/orders/:consignment_id/cancel", Handlers: []gin.HandlerFunc{authMiddleware.AuthRequired(o.cancelOrder)}},
-		{Method: http.MethodGet, Path: "/orders/all", Handlers: []gin.HandlerFunc{authMiddleware.AuthRequired(o.listOrders)}},
+		{Method: http.MethodPost, Path: "/orders", Handlers: []gin.HandlerFunc{authMiddleware.RequireAuthentication(o.createOrder)}},
+		{Method: http.MethodPut, Path: "/orders/:consignment_id/cancel", Handlers: []gin.HandlerFunc{authMiddleware.RequireAuthentication(o.cancelOrder)}},
+		{Method: http.MethodGet, Path: "/orders/all", Handlers: []gin.HandlerFunc{authMiddleware.RequireAuthentication(o.listOrders)}},
 	}
 }
 

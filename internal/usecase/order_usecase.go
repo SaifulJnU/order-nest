@@ -13,6 +13,7 @@ import (
 	"github.com/order-nest/internal/domain"
 	"github.com/order-nest/internal/domain/contract"
 	"github.com/order-nest/pkg/helper"
+	appLogger "github.com/order-nest/pkg/logger"
 )
 
 const (
@@ -29,15 +30,19 @@ func NewOrderUsecase(orderRepo contract.OrderRepository) contract.OrderUsecase {
 }
 
 func (o *orderUsecase) Create(ctx context.Context, params domain.CreateOrderRequest) (createResp domain.CreateOrderResponse, err error) {
+	appLogger.L().WithField("created_by", params.CreatedBy).Info("create order request received")
 	if params.CreatedBy == 0 {
+		appLogger.L().Warn("create order failed: user id not passed")
 		return createResp, errors.New("user id not passed")
 	}
 
 	// Validate input
 	if err = helper.Validator.Struct(params); err != nil {
 		if validationErr := convertValidationError(err, params); validationErr != nil {
+			appLogger.L().WithField("created_by", params.CreatedBy).Warn("validation failed for create order")
 			return createResp, validationErr
 		}
+		appLogger.L().WithError(err).Error("validator error for create order")
 		return createResp, err
 	}
 
@@ -86,11 +91,30 @@ func (o *orderUsecase) Create(ctx context.Context, params domain.CreateOrderRequ
 		UpdatedBy:          params.CreatedBy,
 	}
 
-	return o.orderRepo.Create(ctx, order)
+	resp, repoErr := o.orderRepo.Create(ctx, order)
+	if repoErr != nil {
+		appLogger.L().WithError(repoErr).Error("order repository create failed")
+		return createResp, repoErr
+	}
+	appLogger.L().WithField("consignment_id", resp.ConsignmentId).Info("order created successfully")
+	return resp, nil
 }
 
 func (o *orderUsecase) List(ctx context.Context, parameters domain.OrderListFilter) (domain.OrderListResponse, error) {
-	return o.orderRepo.List(ctx, parameters)
+	appLogger.L().WithFields(map[string]interface{}{
+		"created_by":      parameters.CreatedBy,
+		"transfer_status": parameters.TransferStatus,
+		"archive":         parameters.Archive,
+		"limit":           parameters.Limit,
+		"page":            parameters.Page,
+	}).Info("list orders request received")
+	resp, err := o.orderRepo.List(ctx, parameters)
+	if err != nil {
+		appLogger.L().WithError(err).Error("order repository list failed")
+		return domain.OrderListResponse{}, err
+	}
+	appLogger.L().WithField("total", resp.Total).Info("list orders success")
+	return resp, nil
 }
 
 // convertValidationError converts the validator's validation error into domain.ValidationError
@@ -131,5 +155,14 @@ func convertValidationError(err error, obj interface{}) *domain.ValidationError 
 }
 
 func (o *orderUsecase) Cancel(ctx context.Context, consignmentId string, userID uint64) error {
-	return o.orderRepo.Cancel(ctx, consignmentId, userID)
+	appLogger.L().WithFields(map[string]interface{}{
+		"consignment_id": consignmentId,
+		"user_id":        userID,
+	}).Info("cancel order request received")
+	if err := o.orderRepo.Cancel(ctx, consignmentId, userID); err != nil {
+		appLogger.L().WithError(err).Error("order repository cancel failed")
+		return err
+	}
+	appLogger.L().WithField("consignment_id", consignmentId).Info("order cancelled successfully")
+	return nil
 }

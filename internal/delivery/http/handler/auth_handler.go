@@ -28,7 +28,7 @@ func NewAuthHandler(authUsecase contract.AuthUsecase) *AuthHandler {
 func (a *AuthHandler) Routes(authMiddleware *middleware.Auth) []RouteDef {
 	return []RouteDef{
 		{Method: http.MethodPost, Path: "/login", Handlers: []gin.HandlerFunc{a.login}},
-		{Method: http.MethodGet, Path: "/logout", Handlers: []gin.HandlerFunc{authMiddleware.AuthRequired(a.logout)}},
+		{Method: http.MethodGet, Path: "/logout", Handlers: []gin.HandlerFunc{authMiddleware.RequireAuthentication(a.logout)}},
 	}
 }
 
