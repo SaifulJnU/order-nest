@@ -73,7 +73,12 @@ func (o *OrderHandler) createOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, ord)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Order Created Successfully",
+		"type":    "success",
+		"code":    http.StatusOK,
+		"data":    ord,
+	})
 }
 
 // cancelOrder handles cancelling an existing order by consignment ID.
@@ -103,10 +108,10 @@ func (o *OrderHandler) cancelOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, domain.HttpResponse{
-		Message: "Order cancelled successfully",
-		Type:    "success",
-		Code:    http.StatusOK,
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Order Cancelled Successfully",
+		"type":    "success",
+		"code":    http.StatusOK,
 	})
 }
 
@@ -140,7 +145,7 @@ func (o *OrderHandler) listOrders(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "ok",
+		"message": "Orders successfully fetched.",
 		"type":    "success",
 		"code":    http.StatusOK,
 		"data":    orders,

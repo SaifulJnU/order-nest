@@ -49,7 +49,7 @@ func (a *AuthHandler) login(c *gin.Context) {
 		// Handle known domain errors
 		if errors.Is(err, domain.BadRequestError) || errors.Is(err, domain.NotFoundError) {
 			c.JSON(http.StatusBadRequest, customError.HTTPError{
-				Message: "invalid credentials",
+				Message: "The user credentials were incorrect.",
 				Type:    "error",
 				Code:    http.StatusBadRequest,
 			})
@@ -73,7 +73,7 @@ func (a *AuthHandler) login(c *gin.Context) {
 func (a *AuthHandler) logout(c *gin.Context) {
 	time.Sleep(2 * time.Second)
 	c.JSON(http.StatusOK, gin.H{
-		"message": "logged out",
+		"message": "Successfully logged out",
 		"type":    "success",
 		"code":    http.StatusOK,
 	})

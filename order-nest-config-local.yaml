@@ -1,0 +1,15 @@
+app:
+  port: 8080
+  access_token_duration: 900
+  refresh_token_duration: 432000
+  jwt_secret_key: p9v!X#2fG8tR$1nZq7Hj@6wLk0eM^4y
+
+postgres:
+  host: 127.0.0.1
+  port: 5432
+  db_name: ordernest
+  user: ordernest
+  password: adminsecret
+  timezone: Asia/Dhaka
+  ssl_mode: disable
+
