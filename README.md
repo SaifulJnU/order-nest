@@ -10,7 +10,7 @@ To run the project on your machine, follow these steps:
 ### Step 1: Clone the repository and navigate to the project directory.
 
 ```bash
-git clone git@github.com:saifuljnu/order-nest.git
+git clone git@github.com:SaifulJnU/order-nest.git
 cd order-nest
 ```
 ### Step 2: run the following command to build and start the Docker containers:
